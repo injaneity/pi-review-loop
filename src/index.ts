@@ -31,14 +31,6 @@ export default function reviewLoop(pi: ExtensionAPI) {
     handler: openReview,
   });
 
-  pi.on("tool_execution_start", (event, ctx) => {
-    controller?.noteToolStart(event.toolCallId, event.toolName, event.args, ctx.cwd);
-  });
-
-  pi.on("tool_execution_end", (event) => {
-    controller?.noteToolEnd(event.toolCallId);
-  });
-
   pi.on("session_shutdown", async () => {
     const active = controller;
     controller = null;

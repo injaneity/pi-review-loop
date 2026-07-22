@@ -1,4 +1,6 @@
 import * as monaco from "monaco-editor/editor/editor.api.js";
+import "monaco-editor/editor/contrib/find/browser/findController.js";
+import "monaco-editor/editor/contrib/wordHighlighter/browser/wordHighlighter.js";
 import "monaco-editor/languages/definitions/css/register.js";
 import "monaco-editor/languages/definitions/go/register.js";
 import "monaco-editor/languages/definitions/html/register.js";
@@ -241,6 +243,10 @@ function makeCommentId(): string {
   return `comment:${Date.now()}:${Math.random().toString(16).slice(2)}`;
 }
 
+function isPendingReview(path: string): boolean {
+  return workspace?.pendingFiles.some((file) => file.path === path) ?? false;
+}
+
 function commentCount(path: string): number {
   return comments.filter((comment) => comment.path === path).length;
 }
@@ -273,6 +279,13 @@ function makeRecentRow(file: ChangedFile): HTMLButtonElement {
   button.append(copy);
   const badge = commentBadge(file.path);
   if (badge) button.append(badge);
+  if (workspace?.mode === "head" && !isPendingReview(file.path)) {
+    const reviewed = document.createElement("span");
+    reviewed.className = "reviewed-check";
+    reviewed.textContent = "✓";
+    reviewed.title = "Matches the last reviewed checkpoint";
+    button.append(reviewed);
+  }
   button.append(time);
   button.addEventListener("click", () => selectPath(file.path, true));
   return button;
@@ -322,10 +335,17 @@ function appendTree(node: TreeNode, depth: number): void {
       row.append(label);
       const badge = commentBadge(child.file.path);
       if (badge) row.append(badge);
-      if (workspace?.recentPaths.includes(child.file.path)) {
+      if (isPendingReview(child.file.path)) {
         const dot = document.createElement("span");
         dot.className = "recent-dot";
+        dot.title = "Changed since the last review";
         row.append(dot);
+      } else if (workspace?.mode === "head") {
+        const reviewed = document.createElement("span");
+        reviewed.className = "reviewed-check";
+        reviewed.textContent = "✓";
+        reviewed.title = "Matches the last reviewed checkpoint";
+        row.append(reviewed);
       }
       row.addEventListener("click", () => selectPath(child.file!.path));
       fileTreeEl.append(row);
@@ -355,13 +375,13 @@ function appendTree(node: TreeNode, depth: number): void {
 function renderRecent(): void {
   if (workspace == null) return;
   recentListEl.replaceChildren();
-  const pending = new Map(workspace.pendingFiles.map((file) => [file.path, file]));
-  const files = workspace.recentPaths.map((path) => pending.get(path)).filter((file): file is ChangedFile => file != null).filter(matches);
+  const activeFiles = new Map(workspace.files.map((file) => [file.path, file]));
+  const files = workspace.recentPaths.map((path) => activeFiles.get(path)).filter((file): file is ChangedFile => file != null).filter(matches);
   recentCountEl.textContent = files.length ? String(files.length) : "";
   if (files.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-list";
-    empty.textContent = workspace.pendingFiles.length ? "No recent matches" : "No new changes";
+    empty.textContent = workspace.files.length ? "No recent matches" : workspace.mode === "checkpoint" ? "No new changes" : "Working tree is clean";
     recentListEl.append(empty);
     return;
   }

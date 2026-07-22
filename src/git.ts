@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { gzipSync, gunzipSync } from "node:zlib";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { ChangeStatus, ReviewCheckpoint, StoredFile } from "./types.js";
 
@@ -188,10 +188,15 @@ export async function createCheckpoint(
 }
 
 export async function fileMtime(repoRoot: string, path: string): Promise<number> {
+  const absolute = join(repoRoot, path);
   try {
-    return (await stat(join(repoRoot, path))).mtimeMs;
+    return (await stat(absolute)).mtimeMs;
   } catch {
-    return 0;
+    try {
+      return (await stat(dirname(absolute))).mtimeMs;
+    } catch {
+      return 0;
+    }
   }
 }
 

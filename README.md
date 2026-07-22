@@ -29,6 +29,8 @@ Then run:
 - **Since review** compares the current workspace with the last submitted review checkpoint. Before the first review, it compares with `HEAD`.
 - **vs HEAD** shows the complete working-tree diff against `HEAD`.
 
+The Recently Changed section follows the active diff mode and is ordered by filesystem modification time. In `vs HEAD`, files matching the latest review checkpoint remain visible with a reviewed checkmark.
+
 Review checkpoints are stored as custom entries in the active pi session and restored when that session is resumed. Custom entries are not included in model context.
 
 ## Requirements

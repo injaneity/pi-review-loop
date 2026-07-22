@@ -1,4 +1,4 @@
-import { relative, resolve, sep } from "node:path";
+import { relative, sep } from "node:path";
 import { watch, type FSWatcher } from "chokidar";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { open, type GlimpseWindow } from "glimpseui";
@@ -40,10 +40,6 @@ export class ReviewController {
   private watcher: FSWatcher | null = null;
   private model: WorkspaceModel | null = null;
   private repoRoot = "";
-  private activeTools = new Set<string>();
-  private explicitPaths = new Map<string, string[]>();
-  private observedAgentPaths = new Set<string>();
-  private pendingRefreshPaths = new Set<string>();
   private refreshTimer: NodeJS.Timeout | null = null;
   private operation = Promise.resolve();
   private submitting = false;
@@ -66,7 +62,7 @@ export class ReviewController {
 
     this.repoRoot = await getRepoRoot(this.pi, ctx.cwd);
     this.model = await WorkspaceModel.create(this.pi, this.repoRoot, latestCheckpoint(ctx, this.repoRoot));
-    await this.model.refresh([], true);
+    await this.model.refresh();
     await this.startWatcher();
 
     const window = open(loadReviewHtml(), { width: 1480, height: 920, title: "Review Loop" });
@@ -82,28 +78,6 @@ export class ReviewController {
     });
 
     ctx.ui.notify("Opened Review Loop.", "info");
-  }
-
-  noteToolStart(toolCallId: string, toolName: string, args: unknown, cwd: string): void {
-    if (this.window == null) return;
-    this.activeTools.add(toolCallId);
-    if ((toolName === "edit" || toolName === "write") && args != null && typeof args === "object") {
-      const rawPath = (args as { path?: unknown }).path;
-      if (typeof rawPath === "string") {
-        const normalized = this.toRepoPath(resolve(cwd, rawPath.replace(/^@/, "")));
-        if (normalized != null) this.explicitPaths.set(toolCallId, [normalized]);
-      }
-    }
-  }
-
-  noteToolEnd(toolCallId: string): void {
-    if (this.window == null) return;
-    const paths = this.explicitPaths.get(toolCallId) ?? [];
-    this.explicitPaths.delete(toolCallId);
-    for (const path of paths) this.observedAgentPaths.add(path);
-    this.activeTools.delete(toolCallId);
-    this.scheduleRefresh([...paths, ...this.observedAgentPaths]);
-    if (this.activeTools.size === 0) this.observedAgentPaths.clear();
   }
 
   async close(): Promise<void> {
@@ -127,8 +101,7 @@ export class ReviewController {
     this.watcher.on("all", (_event, path) => {
       const repoPath = this.toRepoPath(path);
       if (repoPath == null) return;
-      if (this.activeTools.size > 0) this.observedAgentPaths.add(repoPath);
-      this.scheduleRefresh(this.activeTools.size > 0 ? [repoPath] : []);
+      this.scheduleRefresh();
     });
   }
 
@@ -138,16 +111,13 @@ export class ReviewController {
     return path.split(sep).join("/");
   }
 
-  private scheduleRefresh(agentPaths: string[]): void {
-    for (const path of agentPaths) this.pendingRefreshPaths.add(path);
+  private scheduleRefresh(): void {
     if (this.refreshTimer != null) clearTimeout(this.refreshTimer);
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = null;
-      const paths = [...this.pendingRefreshPaths];
-      this.pendingRefreshPaths.clear();
       this.enqueue(async () => {
         if (this.model == null) return;
-        const state = await this.model.refresh(paths);
+        const state = await this.model.refresh();
         this.send({ type: "workspace", state });
       });
     }, 100);

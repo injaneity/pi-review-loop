@@ -155,6 +155,7 @@ button { color: inherit; }
 .tree-row .label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .tree-row .recent-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px rgba(122,162,247,.5); }
 .comment-count { display: grid; min-width: 16px; height: 16px; place-items: center; border: 1px solid #405273; border-radius: 999px; padding: 0 4px; background: var(--accent-bg); color: var(--accent-strong); font-size: 9px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.reviewed-check { width: 12px; color: var(--green); font-size: 10px; font-weight: 700; text-align: center; }
 
 .main-pane { position: relative; display: flex; min-width: 0; flex: 1; flex-direction: column; background: var(--bg); }
 .filebar { height: 38px; display: flex; flex: 0 0 38px; align-items: center; justify-content: space-between; padding: 0 10px 0 13px; border-bottom: 1px solid var(--border-soft); background: var(--panel); }

@@ -9,6 +9,7 @@ import test from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { composeFeedback } from "../src/prompt.js";
 import { createCheckpoint, decodeStored, parsePorcelainPaths, scanAgainstCheckpoint } from "../src/git.js";
+import { WorkspaceModel } from "../src/workspace.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -82,6 +83,14 @@ test("checkpoint stores dirty state and produces only the next delta", async () 
     assert.equal(decodeStored(checkpoint.overrides["app.ts"]!), "export const value = 2;\n");
     assert.equal(decodeStored(checkpoint.overrides["untracked.ts"]!), "first\n");
     assert.deepEqual(await scanAgainstCheckpoint(fakePi(), cwd, checkpoint), []);
+
+    const reviewedModel = await WorkspaceModel.create(fakePi(), cwd, checkpoint);
+    await reviewedModel.refresh();
+    reviewedModel.setMode("head");
+    const reviewedHeadState = reviewedModel.state();
+    assert.deepEqual(reviewedHeadState.pendingFiles, []);
+    assert.deepEqual(reviewedHeadState.recentPaths.sort(), ["app.ts", "untracked.ts"]);
+    assert.ok(reviewedHeadState.files.every((file) => typeof file.recentAt === "number"));
 
     await writeFile(join(cwd, "app.ts"), "export const value = 3;\n");
     await writeFile(join(cwd, "clean.ts"), "export const clean = false;\n");

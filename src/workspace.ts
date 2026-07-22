@@ -7,8 +7,7 @@ export class WorkspaceModel {
   private checkpoint: ReviewCheckpoint | null;
   private readonly initialHead: string | null;
   private pairsByMode = new Map<ReviewMode, Map<string, FilePair>>();
-  private previousFingerprints = new Map<string, string>();
-  private recentAt = new Map<string, number>();
+  private mtimes = new Map<string, number>();
   private branch: string | null = null;
 
   private constructor(
@@ -39,16 +38,15 @@ export class WorkspaceModel {
 
   setCheckpoint(checkpoint: ReviewCheckpoint): void {
     this.checkpoint = checkpoint;
-    this.recentAt.clear();
-    this.previousFingerprints.clear();
     this.pairsByMode.clear();
+    this.mtimes.clear();
   }
 
   private checkpointBaseline(): Pick<ReviewCheckpoint, "headSha" | "overrides"> {
     return this.checkpoint ?? { headSha: this.initialHead, overrides: {} };
   }
 
-  async refresh(agentPaths: string[] = [], initializeRecent = false): Promise<WorkspaceState> {
+  async refresh(): Promise<WorkspaceState> {
     const [checkpointPairs, headPairs, branch] = await Promise.all([
       scanAgainstCheckpoint(this.pi, this.repoRoot, this.checkpointBaseline()),
       scanAgainstHead(this.pi, this.repoRoot),
@@ -58,25 +56,8 @@ export class WorkspaceModel {
     this.pairsByMode.set("checkpoint", new Map(checkpointPairs.map((pair) => [pair.path, pair])));
     this.pairsByMode.set("head", new Map(headPairs.map((pair) => [pair.path, pair])));
 
-    const nextFingerprints = new Map(checkpointPairs.map((pair) => [pair.path, pair.fingerprint]));
-    if (initializeRecent && this.recentAt.size === 0) {
-      await Promise.all(checkpointPairs.map(async (pair) => {
-        this.recentAt.set(pair.path, await fileMtime(this.repoRoot, pair.path) || Date.now());
-      }));
-    }
-
-    const now = Date.now();
-    for (const path of agentPaths) {
-      const pair = nextFingerprints.get(path);
-      if (pair != null && pair !== this.previousFingerprints.get(path)) this.recentAt.set(path, now);
-    }
-    for (const [path, fingerprint] of nextFingerprints) {
-      if (agentPaths.includes(path) && fingerprint !== this.previousFingerprints.get(path)) this.recentAt.set(path, now);
-    }
-    for (const path of [...this.recentAt.keys()]) {
-      if (!nextFingerprints.has(path)) this.recentAt.delete(path);
-    }
-    this.previousFingerprints = nextFingerprints;
+    const paths = new Set([...checkpointPairs, ...headPairs].map((pair) => pair.path));
+    this.mtimes = new Map(await Promise.all([...paths].map(async (path) => [path, await fileMtime(this.repoRoot, path)] as const)));
     return this.state();
   }
 
@@ -85,14 +66,13 @@ export class WorkspaceModel {
       path: pair.path,
       status: pair.status,
       fingerprint: pair.fingerprint,
-      recentAt: this.recentAt.get(pair.path),
+      recentAt: this.mtimes.get(pair.path),
     });
     const files = [...(this.pairsByMode.get(this.mode)?.values() ?? [])].map(toChangedFile);
     const pendingFiles = [...(this.pairsByMode.get("checkpoint")?.values() ?? [])].map(toChangedFile);
-    const recentPaths = [...this.recentAt.entries()]
-      .filter(([path]) => this.pairsByMode.get("checkpoint")?.has(path))
-      .sort((a, b) => b[1] - a[1])
-      .map(([path]) => path);
+    const recentPaths = [...files]
+      .sort((a, b) => (b.recentAt ?? 0) - (a.recentAt ?? 0) || a.path.localeCompare(b.path))
+      .map((file) => file.path);
 
     return {
       repoRoot: this.repoRoot,
