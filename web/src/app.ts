@@ -64,10 +64,19 @@ const toastEl = byId("toast");
 let workspace: WorkspaceState | null = null;
 let activePath: string | null = null;
 let mountedFingerprint = "";
+let mountedPath: string | null = null;
+let mountedMode: ReviewMode | null = null;
+const scrollPositions = new Map<string, ScrollPosition>();
 let activeRequestId = "";
 let requestCounter = 0;
 interface UiComment extends ReviewComment { id: string }
 interface ActiveViewZone { id: string; editor: monaco.editor.ICodeEditor; domNode: HTMLElement }
+interface ScrollPosition {
+  originalTop: number;
+  originalLeft: number;
+  modifiedTop: number;
+  modifiedLeft: number;
+}
 
 let comments: UiComment[] = [];
 let draft: Omit<UiComment, "body" | "id"> | null = null;
@@ -181,15 +190,46 @@ function matches(file: ChangedFile): boolean {
   return !query || file.path.toLowerCase().includes(query);
 }
 
+function scrollKey(path: string, mode: ReviewMode): string {
+  return `${mode}:${path}`;
+}
+
+function saveMountedScroll(): void {
+  if (mountedPath == null || mountedMode == null || originalModel == null || modifiedModel == null) return;
+  const originalEditor = diffEditor.getOriginalEditor();
+  const modifiedEditor = diffEditor.getModifiedEditor();
+  scrollPositions.set(scrollKey(mountedPath, mountedMode), {
+    originalTop: originalEditor.getScrollTop(),
+    originalLeft: originalEditor.getScrollLeft(),
+    modifiedTop: modifiedEditor.getScrollTop(),
+    modifiedLeft: modifiedEditor.getScrollLeft(),
+  });
+}
+
+function restoreScroll(path: string, mode: ReviewMode): void {
+  const position = scrollPositions.get(scrollKey(path, mode)) ?? {
+    originalTop: 0,
+    originalLeft: 0,
+    modifiedTop: 0,
+    modifiedLeft: 0,
+  };
+  const originalEditor = diffEditor.getOriginalEditor();
+  const modifiedEditor = diffEditor.getModifiedEditor();
+  originalEditor.setScrollPosition({ scrollTop: position.originalTop, scrollLeft: position.originalLeft });
+  modifiedEditor.setScrollPosition({ scrollTop: position.modifiedTop, scrollLeft: position.modifiedLeft });
+}
+
 function selectPath(path: string, preferCheckpoint = false): void {
   if (workspace == null) return;
   const inCurrentMode = workspace.files.some((file) => file.path === path);
   if (!inCurrentMode && preferCheckpoint && workspace.mode !== "checkpoint") {
+    saveMountedScroll();
     pendingOpenPath = path;
     send({ type: "set-mode", mode: "checkpoint" });
     return;
   }
   if (!inCurrentMode) return;
+  saveMountedScroll();
   clearViewZones();
   activePath = path;
   mountedFingerprint = "";
@@ -413,6 +453,7 @@ function clearViewZones(): void {
 }
 
 function disposeModels(): void {
+  saveMountedScroll();
   clearViewZones();
   diffEditor.setModel(null);
   originalModel?.dispose();
@@ -420,19 +461,25 @@ function disposeModels(): void {
   originalModel = null;
   modifiedModel = null;
   mountedFingerprint = "";
+  mountedPath = null;
+  mountedMode = null;
 }
 
 function mountFile(file: FileContents): void {
   if (file.path !== activePath || workspace?.mode !== file.mode) return;
-  const scrollTop = diffEditor.getModifiedEditor().getScrollTop();
   disposeModels();
   const language = inferLanguage(file.path);
   originalModel = monaco.editor.createModel(file.originalContent, language);
   modifiedModel = monaco.editor.createModel(file.modifiedContent, language);
   diffEditor.setModel({ original: originalModel, modified: modifiedModel });
   mountedFingerprint = file.fingerprint;
+  mountedPath = file.path;
+  mountedMode = file.mode;
   syncInlineComments();
-  requestAnimationFrame(() => diffEditor.getModifiedEditor().setScrollTop(scrollTop));
+  requestAnimationFrame(() => {
+    restoreScroll(file.path, file.mode);
+    setTimeout(() => restoreScroll(file.path, file.mode), 30);
+  });
 }
 
 function requestActiveFile(): void {
@@ -637,6 +684,7 @@ modifiedEditor.onDidLayoutChange(() => activeViewZones.filter((zone) => zone.edi
 window.__reviewReceive = (message: HostMessage): void => {
   if (message.type === "workspace") {
     window.clearInterval(readyTimer);
+    saveMountedScroll();
     const previousPath = activePath;
     const previousMode = workspace?.mode;
     workspace = message.state;
@@ -673,8 +721,14 @@ window.__reviewReceive = (message: HostMessage): void => {
   }
 };
 
-checkpointButton.addEventListener("click", () => send({ type: "set-mode", mode: "checkpoint" as ReviewMode }));
-headButton.addEventListener("click", () => send({ type: "set-mode", mode: "head" as ReviewMode }));
+checkpointButton.addEventListener("click", () => {
+  saveMountedScroll();
+  send({ type: "set-mode", mode: "checkpoint" as ReviewMode });
+});
+headButton.addEventListener("click", () => {
+  saveMountedScroll();
+  send({ type: "set-mode", mode: "head" as ReviewMode });
+});
 searchInput.addEventListener("input", () => { renderRecent(); renderTree(); });
 fileCommentButton.addEventListener("click", openFileDraft);
 addCommentButton.addEventListener("click", addDraft);
