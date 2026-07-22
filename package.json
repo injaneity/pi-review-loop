@@ -25,7 +25,6 @@
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
-    "chokidar": "^5.0.0",
     "glimpseui": "^0.8.1"
   },
   "peerDependencies": {

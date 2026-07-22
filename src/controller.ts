@@ -1,5 +1,3 @@
-import { relative, sep } from "node:path";
-import { watch, type FSWatcher } from "chokidar";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { open, type GlimpseWindow } from "glimpseui";
 import { createCheckpoint, getRepoRoot } from "./git.js";
@@ -37,7 +35,6 @@ function parseMessage(value: unknown): WindowMessage | null {
 
 export class ReviewController {
   private window: GlimpseWindow | null = null;
-  private watcher: FSWatcher | null = null;
   private model: WorkspaceModel | null = null;
   private repoRoot = "";
   private refreshTimer: NodeJS.Timeout | null = null;
@@ -63,7 +60,7 @@ export class ReviewController {
     this.repoRoot = await getRepoRoot(this.pi, ctx.cwd);
     this.model = await WorkspaceModel.create(this.pi, this.repoRoot, latestCheckpoint(ctx, this.repoRoot));
     await this.model.refresh();
-    await this.startWatcher();
+    this.startRefreshLoop();
 
     const window = open(loadReviewHtml(), { width: 1480, height: 920, title: "Review Loop" });
     this.window = window;
@@ -83,44 +80,21 @@ export class ReviewController {
   async close(): Promise<void> {
     if (this.refreshTimer != null) clearTimeout(this.refreshTimer);
     this.refreshTimer = null;
-    await this.watcher?.close();
-    this.watcher = null;
     const window = this.window;
     this.window = null;
     try { window?.close(); } catch {}
   }
 
-  private async startWatcher(): Promise<void> {
-    this.watcher = watch(this.repoRoot, {
-      ignoreInitial: true,
-      ignored: (path) => {
-        const rel = relative(this.repoRoot, path);
-        return rel === ".git" || rel.startsWith(`.git${sep}`) || rel === "node_modules" || rel.startsWith(`node_modules${sep}`);
-      },
-    });
-    this.watcher.on("all", (_event, path) => {
-      const repoPath = this.toRepoPath(path);
-      if (repoPath == null) return;
-      this.scheduleRefresh();
-    });
-  }
-
-  private toRepoPath(absolutePath: string): string | null {
-    const path = relative(this.repoRoot, absolutePath);
-    if (!path || path === ".." || path.startsWith(`..${sep}`)) return null;
-    return path.split(sep).join("/");
-  }
-
-  private scheduleRefresh(): void {
-    if (this.refreshTimer != null) clearTimeout(this.refreshTimer);
+  private startRefreshLoop(): void {
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = null;
       this.enqueue(async () => {
-        if (this.model == null) return;
+        if (this.model == null || this.window == null) return;
         const state = await this.model.refresh();
         this.send({ type: "workspace", state });
+        this.startRefreshLoop();
       });
-    }, 100);
+    }, 1_000);
   }
 
   private enqueue(task: () => Promise<void>): void {
@@ -181,8 +155,6 @@ export class ReviewController {
     this.window = null;
     if (this.refreshTimer != null) clearTimeout(this.refreshTimer);
     this.refreshTimer = null;
-    void this.watcher?.close();
-    this.watcher = null;
     this.onClosed();
   }
 }
