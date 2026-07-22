@@ -1,11 +1,11 @@
 import { relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
 import { watch, type FSWatcher } from "chokidar";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { open, type GlimpseWindow } from "glimpseui";
 import { createCheckpoint, getRepoRoot } from "./git.js";
 import { composeFeedback } from "./prompt.js";
 import type { HostMessage, ReviewCheckpoint, WindowMessage } from "./types.js";
+import { loadReviewHtml } from "./ui.js";
 import { WorkspaceModel } from "./workspace.js";
 
 export const CHECKPOINT_ENTRY = "review-loop/checkpoint";
@@ -69,7 +69,7 @@ export class ReviewController {
     await this.model.refresh([], true);
     await this.startWatcher();
 
-    const window = open("", { width: 1480, height: 920, title: "Review Loop", hidden: true });
+    const window = open(loadReviewHtml(), { width: 1480, height: 920, title: "Review Loop" });
     this.window = window;
     window.on("message", (value) => {
       const message = parseMessage(value);
@@ -81,8 +81,6 @@ export class ReviewController {
       this.disposeWindow(window);
     });
 
-    const htmlPath = fileURLToPath(new URL("../web/dist/index.html", import.meta.url));
-    window.loadFile(htmlPath);
     ctx.ui.notify("Opened Review Loop.", "info");
   }
 
@@ -162,7 +160,6 @@ export class ReviewController {
   private async handleMessage(message: WindowMessage, ctx: ExtensionCommandContext): Promise<void> {
     if (this.model == null) return;
     if (message.type === "ready") {
-      this.window?.show({ title: "Review Loop" });
       this.send({ type: "workspace", state: this.model.state() });
       return;
     }

@@ -17,12 +17,17 @@ declare global {
   interface Window {
     glimpse?: { send(message: unknown): void };
     __reviewReceive(message: HostMessage): void;
+    __reviewWorkerSource: string;
     MonacoEnvironment: { getWorker(): Worker };
   }
 }
 
+let workerUrl: string | null = null;
 window.MonacoEnvironment = {
-  getWorker: () => new Worker(new URL("./editor.worker.js", import.meta.url)),
+  getWorker: () => {
+    workerUrl ??= URL.createObjectURL(new Blob([window.__reviewWorkerSource], { type: "text/javascript" }));
+    return new Worker(workerUrl);
+  },
 };
 
 const byId = <T extends HTMLElement>(id: string): T => {
@@ -65,6 +70,7 @@ let comments: ReviewComment[] = [];
 let draft: Omit<ReviewComment, "body"> | null = null;
 let pendingOpenPath: string | null = null;
 let toastTimer = 0;
+let readyTimer = 0;
 const collapsedDirs = new Set<string>();
 
 monaco.editor.defineTheme("review-loop", {
@@ -476,6 +482,7 @@ installGutterComments(diffEditor.getModifiedEditor(), "modified");
 
 window.__reviewReceive = (message: HostMessage): void => {
   if (message.type === "workspace") {
+    window.clearInterval(readyTimer);
     const previousPath = activePath;
     workspace = message.state;
     if (pendingOpenPath && workspace.files.some((file) => file.path === pendingOpenPath)) {
@@ -544,4 +551,8 @@ window.addEventListener("keydown", (event) => {
 });
 window.setInterval(renderRecent, 10_000);
 
-send({ type: "ready" });
+const announceReady = (): void => {
+  if (workspace == null) send({ type: "ready" });
+};
+announceReady();
+readyTimer = window.setInterval(announceReady, 250);

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -48,6 +49,19 @@ test("formats compact actionable feedback", () => {
     "   Clarify setup.",
     "   Add an example.",
   ].join("\n"));
+});
+
+test("bundled webview is self-contained and syntactically valid", async () => {
+  const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+  const html = await readFile(join(projectRoot, "web/dist/index.html"), "utf8");
+  assert.doesNotMatch(html, /__[A-Z_]+__/);
+
+  const appMatch = html.match(/\(0, eval\)\(atob\("([A-Za-z0-9+/=]+)"\)\)/);
+  const workerMatch = html.match(/__reviewWorkerSource = atob\("([A-Za-z0-9+/=]+)"\)/);
+  assert.ok(appMatch, "embedded app bundle is present");
+  assert.ok(workerMatch, "embedded worker bundle is present");
+  assert.doesNotThrow(() => new Function(Buffer.from(appMatch[1]!, "base64").toString("utf8")));
+  assert.doesNotThrow(() => new Function(Buffer.from(workerMatch[1]!, "base64").toString("utf8")));
 });
 
 test("checkpoint stores dirty state and produces only the next delta", async () => {

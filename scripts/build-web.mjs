@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { cp, mkdir, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
 const outdir = new URL("../web/dist/", import.meta.url);
 await rm(outdir, { recursive: true, force: true });
@@ -8,7 +8,7 @@ await mkdir(outdir, { recursive: true });
 await build({
   entryPoints: ["web/src/app.ts"],
   bundle: true,
-  format: "esm",
+  format: "iife",
   target: "es2022",
   outfile: "web/dist/app.js",
   sourcemap: false,
@@ -25,5 +25,18 @@ await build({
   minify: true,
 });
 
-await cp(new URL("../web/src/index.html", import.meta.url), new URL("index.html", outdir));
-await cp(new URL("../web/src/styles.css", import.meta.url), new URL("styles.css", outdir));
+const [template, monacoStyles, appStyles, appSource, workerSource] = await Promise.all([
+  readFile(new URL("../web/src/index.html", import.meta.url), "utf8"),
+  readFile(new URL("app.css", outdir), "utf8"),
+  readFile(new URL("../web/src/styles.css", import.meta.url), "utf8"),
+  readFile(new URL("app.js", outdir), "utf8"),
+  readFile(new URL("editor.worker.js", outdir), "utf8"),
+]);
+
+const base64 = (source) => Buffer.from(source, "utf8").toString("base64");
+const html = template
+  .replace("__MONACO_STYLES_BASE64__", base64(monacoStyles))
+  .replace("__APP_STYLES_BASE64__", base64(appStyles))
+  .replace("__WORKER_SOURCE_BASE64__", base64(workerSource))
+  .replace("__APP_SOURCE_BASE64__", base64(appSource));
+await writeFile(new URL("index.html", outdir), html, "utf8");

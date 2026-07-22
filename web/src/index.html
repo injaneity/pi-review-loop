@@ -4,8 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Review Loop</title>
-  <link rel="stylesheet" href="./app.css">
-  <link rel="stylesheet" href="./styles.css">
+  <script>
+    for (const css of ["__MONACO_STYLES_BASE64__", "__APP_STYLES_BASE64__"]) {
+      const style = document.createElement("style");
+      style.textContent = atob(css);
+      document.head.appendChild(style);
+    }
+  </script>
 </head>
 <body>
   <div id="app">
@@ -77,6 +82,9 @@
     <div id="toast" class="toast"></div>
   </div>
 
-  <script type="module" src="./app.js"></script>
+  <script>
+    window.__reviewWorkerSource = atob("__WORKER_SOURCE_BASE64__");
+    (0, eval)(atob("__APP_SOURCE_BASE64__"));
+  </script>
 </body>
 </html>

@@ -31,11 +31,6 @@ export default function reviewLoop(pi: ExtensionAPI) {
     handler: openReview,
   });
 
-  pi.registerCommand("diff-review", {
-    description: "Alias for /review",
-    handler: openReview,
-  });
-
   pi.on("tool_execution_start", (event, ctx) => {
     controller?.noteToolStart(event.toolCallId, event.toolName, event.args, ctx.cwd);
   });

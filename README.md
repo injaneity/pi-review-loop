@@ -16,8 +16,6 @@ Then run:
 /review
 ```
 
-`/diff-review` is available as an alias.
-
 ## Workflow
 
 1. Open Review Loop with `/review`.
