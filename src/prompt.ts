@@ -2,7 +2,9 @@ import type { ReviewComment } from "./types.js";
 
 function location(comment: ReviewComment): string {
   if (comment.side === "file" || comment.line == null) return comment.path;
-  const suffix = comment.side === "original" ? " (reviewed)" : " (current)";
+  const suffix = comment.side === "original"
+    ? comment.mode === "head" ? " (HEAD)" : " (reviewed)"
+    : " (current)";
   return `${comment.path}:${comment.line}${suffix}`;
 }
 

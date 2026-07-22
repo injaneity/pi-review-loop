@@ -30,6 +30,7 @@ export interface FileContents {
 
 export interface ReviewComment {
   path: string;
+  mode?: ReviewMode;
   side: "original" | "modified" | "file";
   line: number | null;
   body: string;

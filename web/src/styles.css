@@ -154,11 +154,14 @@ button { color: inherit; }
 .tree-row .chevron { width: 9px; color: var(--faint); font-size: 8px; }
 .tree-row .label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .tree-row .recent-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px rgba(122,162,247,.5); }
+.comment-count { display: grid; min-width: 16px; height: 16px; place-items: center; border: 1px solid #405273; border-radius: 999px; padding: 0 4px; background: var(--accent-bg); color: var(--accent-strong); font-size: 9px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .main-pane { position: relative; display: flex; min-width: 0; flex: 1; flex-direction: column; background: var(--bg); }
 .filebar { height: 38px; display: flex; flex: 0 0 38px; align-items: center; justify-content: space-between; padding: 0 10px 0 13px; border-bottom: 1px solid var(--border-soft); background: var(--panel); }
 .file-title { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .file-title #file-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.file-actions { display: flex; align-items: center; gap: 10px; }
+.comment-hint { color: var(--faint); font-size: 10px; }
 .editor { min-height: 0; flex: 1; }
 .hidden { display: none !important; }
 .empty-state { display: grid; flex: 1; place-content: center; justify-items: center; color: var(--muted); }
@@ -205,7 +208,29 @@ button { color: inherit; }
 .toast.visible { opacity: 1; transform: translateY(0); }
 
 .monaco-diff-editor, .monaco-editor { --vscode-focusBorder: transparent; }
+.monaco-editor .view-zones { z-index: 10; }
+.monaco-editor .margin-view-overlays .line-numbers { cursor: pointer; }
+.monaco-editor .review-comment-line { background: rgba(122, 162, 247, .08); }
 .monaco-editor .review-comment-glyph { background: var(--accent); border-radius: 50%; width: 7px !important; height: 7px !important; margin: 6px 0 0 5px; }
+.monaco-editor .review-glyph-plus {
+  width: 16px !important;
+  height: 16px !important;
+  margin: 2px 0 0 1px;
+  border-radius: 4px;
+  background-color: #31568f;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23ffffff' d='M7.25 3a.75.75 0 0 1 1.5 0v4.25H13a.75.75 0 0 1 0 1.5H8.75V13a.75.75 0 0 1-1.5 0V8.75H3a.75.75 0 0 1 0-1.5h4.25V3Z'/%3E%3C/svg%3E");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 12px;
+  cursor: pointer;
+}
+.inline-comment { width: 100%; height: 128px; padding: 8px 12px 10px; border-top: 1px solid #365079; border-bottom: 1px solid var(--border); background: #151a23; }
+.inline-comment-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.inline-comment-header strong { color: var(--text); font-size: 10px; font-weight: 650; }
+.inline-comment-header button { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 10px; }
+.inline-comment-header button:hover { color: var(--red); }
+.inline-comment textarea { width: 100%; height: 76px; resize: none; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); outline: 0; background: #0b0e13; color: var(--text); font-size: 11px; line-height: 1.4; }
+.inline-comment textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(122,162,247,.08); }
 
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 8px; background: #303949; background-clip: padding-box; }
