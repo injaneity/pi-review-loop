@@ -67,7 +67,7 @@ let mountedFingerprint = "";
 let activeRequestId = "";
 let requestCounter = 0;
 interface UiComment extends ReviewComment { id: string }
-interface ActiveViewZone { id: string; editor: monaco.editor.ICodeEditor }
+interface ActiveViewZone { id: string; editor: monaco.editor.ICodeEditor; domNode: HTMLElement }
 
 let comments: UiComment[] = [];
 let draft: Omit<UiComment, "body" | "id"> | null = null;
@@ -112,13 +112,14 @@ const diffEditor = monaco.editor.createDiffEditor(editorEl, {
   automaticLayout: true,
   renderSideBySide: true,
   enableSplitViewResizing: true,
-  minimap: { enabled: false },
+  minimap: { enabled: true, renderCharacters: false, showSlider: "always", size: "proportional" },
   glyphMargin: true,
   folding: true,
   lineNumbersMinChars: 3,
   lineDecorationsWidth: 8,
   scrollBeyondLastLine: false,
-  renderOverviewRuler: false,
+  renderOverviewRuler: true,
+  overviewRulerLanes: 3,
   overviewRulerBorder: false,
   wordWrap: "off",
   diffWordWrap: "off",
@@ -194,6 +195,10 @@ function selectPath(path: string, preferCheckpoint = false): void {
   mountedFingerprint = "";
   render();
   requestActiveFile();
+}
+
+function makeCommentId(): string {
+  return `comment:${Date.now()}:${Math.random().toString(16).slice(2)}`;
 }
 
 function commentCount(path: string): number {
@@ -496,7 +501,7 @@ function openFileDraft(): void {
 function addDraft(): void {
   const body = draftInput.value.trim();
   if (draft == null || !body) return;
-  comments.push({ ...draft, id: crypto.randomUUID(), body });
+  comments.push({ ...draft, id: makeCommentId(), body });
   draft = null;
   draftInput.value = "";
   renderFeedback();
@@ -519,9 +524,16 @@ function renderDecorations(): void {
   if (modifiedModel) modifiedDecorations = diffEditor.getModifiedEditor().deltaDecorations(modifiedDecorations, modified);
 }
 
-function inlineCommentElement(comment: UiComment): HTMLElement {
+function sizeInlineComment(container: HTMLElement, editor: monaco.editor.ICodeEditor): void {
+  const width = editor.getLayoutInfo().contentWidth;
+  container.style.width = `${width}px`;
+  container.style.maxWidth = `${width}px`;
+}
+
+function inlineCommentElement(comment: UiComment, editor: monaco.editor.ICodeEditor): HTMLElement {
   const container = document.createElement("div");
   container.className = "inline-comment";
+  sizeInlineComment(container, editor);
   const header = document.createElement("div");
   header.className = "inline-comment-header";
   const title = document.createElement("strong");
@@ -561,12 +573,13 @@ function syncInlineComments(): void {
     const editor = comment.side === "original" ? originalEditor : modifiedEditor;
     const maxLine = editor.getModel()?.getLineCount() ?? comment.line!;
     editor.changeViewZones((accessor) => {
+      const domNode = inlineCommentElement(comment, editor);
       const id = accessor.addZone({
         afterLineNumber: Math.min(comment.line!, maxLine),
         heightInPx: 128,
-        domNode: inlineCommentElement(comment),
+        domNode,
       });
-      activeViewZones.push({ id, editor });
+      activeViewZones.push({ id, editor, domNode });
     });
   });
   renderDecorations();
@@ -579,7 +592,7 @@ function addInlineComment(side: "original" | "modified", line: number): void {
     document.querySelector<HTMLTextAreaElement>(`textarea[data-comment-id="${existing.id}"]`)?.focus();
     return;
   }
-  comments.push({ id: crypto.randomUUID(), path: activePath, mode: workspace.mode, side, line, body: "" });
+  comments.push({ id: makeCommentId(), path: activePath, mode: workspace.mode, side, line, body: "" });
   renderRecent();
   renderTree();
   updateSubmitButton();
@@ -605,11 +618,21 @@ function installGutterComments(editor: monaco.editor.ICodeEditor, side: "origina
   editor.onMouseDown((event) => {
     const target = event.target;
     const gutter = target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS || target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN;
-    if (gutter && target.position?.lineNumber) addInlineComment(side, target.position.lineNumber);
+    const line = target.position?.lineNumber ?? target.range?.startLineNumber;
+    if (!gutter || line == null) return;
+    try {
+      addInlineComment(side, line);
+    } catch (error) {
+      showToast(`Could not add comment: ${error instanceof Error ? error.message : String(error)}`);
+    }
   });
 }
-installGutterComments(diffEditor.getOriginalEditor(), "original");
-installGutterComments(diffEditor.getModifiedEditor(), "modified");
+const originalEditor = diffEditor.getOriginalEditor();
+const modifiedEditor = diffEditor.getModifiedEditor();
+installGutterComments(originalEditor, "original");
+installGutterComments(modifiedEditor, "modified");
+originalEditor.onDidLayoutChange(() => activeViewZones.filter((zone) => zone.editor === originalEditor).forEach((zone) => sizeInlineComment(zone.domNode, originalEditor)));
+modifiedEditor.onDidLayoutChange(() => activeViewZones.filter((zone) => zone.editor === modifiedEditor).forEach((zone) => sizeInlineComment(zone.domNode, modifiedEditor)));
 
 window.__reviewReceive = (message: HostMessage): void => {
   if (message.type === "workspace") {
