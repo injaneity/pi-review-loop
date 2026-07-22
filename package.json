@@ -4,7 +4,7 @@
   "description": "A persistent incremental diff review loop for pi",
   "type": "module",
   "license": "MIT",
-  "repository": "github:badlogic/pi-review-loop",
+  "repository": "github:earendil-works/pi-review-loop",
   "files": [
     "src",
     "web/dist",
